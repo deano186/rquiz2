@@ -1,4 +1,5 @@
 // rquiz2 - a Russian vocabulary quiz.
+// Ver.20261113c
 //
 // Written by Claude, Anthropic's AI assistant. The first version came from
 // the free version of Claude on claude.ai. On November 13, 2026, Claude
