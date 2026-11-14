@@ -1,0 +1,4 @@
+# Compiled programs (rebuild with make, make android, make windows)
+/rquiz2
+/rquiz2-android
+/rquiz2.exe
