@@ -34,6 +34,9 @@ picks them at random from the whole list. Options let you choose the words:
 | `-r N` | ask words in random order, from word N onwards |
 | `-e N` | stop at word N (use with `-s` or `-r`) |
 | `-c N` | ask N questions (default: every word in the range) |
+| `-A`   | show the Russian alphabet, with sounds and example words |
+| `-a`   | alphabet quiz: see each letter, type its sound |
+| `-a -o`| alphabet order quiz: find the Nth letter of the alphabet in a word |
 | `-h`   | show help |
 
 ```
@@ -44,6 +47,19 @@ rquiz2 -r 50 -e 250 -c 25  # 25 random words from words 50-250
 
 During the quiz, type `skip` to skip a word or `quit` to stop. Typing "to"
 before a verb is optional.
+
+### Learning the alphabet
+
+`rquiz2 -A` shows all 33 letters with their sounds, an example word for each,
+and a list of letters that look like English ones but sound different
+(Р is "r", Н is "n", В is "v", and so on).
+
+`rquiz2 -a` shows the letters in random order and asks for each one's sound,
+such as `zh` for Ж. Use `-c 10` for a shorter quiz.
+
+`rquiz2 -a -o` goes through the alphabet in order. For each number N it shows
+a word, and you type where in the word the Nth letter of the alphabet is.
+The words are picked at random from the word list, so they change every time.
 
 A good way to learn: start with a small range (`-r 1 -e 20`), then widen it
 (`-r 1 -e 30`, and so on).

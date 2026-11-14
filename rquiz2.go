@@ -111,6 +111,9 @@ Options:
   -r N   random: ask words in random order, from word N onwards
   -e N   end: stop at word N (use with -s or -r)
   -c N   count: ask N questions (default: every word in the range)
+  -A     show the Russian alphabet, with sounds and example words
+  -a     alphabet quiz: see each letter, type its sound (use -c for fewer)
+  -a -o  alphabet order quiz: find the Nth letter of the alphabet in a word
   -h     show this help
 
 With no options, it asks how many questions you want and picks them at
@@ -122,6 +125,7 @@ Examples:
   rquiz2 -s 100         from word 100 to the end, in order
   rquiz2 -r 50 -e 250 -c 25
                         25 random words from words 50-250
+  rquiz2 -a -c 10       10 random letters of the alphabet
 
 During the quiz, type the English meaning, 'skip' to skip a word, or
 'quit' to stop. Typing "to" before a verb is optional.
@@ -156,6 +160,9 @@ func main() {
 	randStart := flag.Int("r", 0, "")
 	end := flag.Int("e", len(words), "")
 	count := flag.Int("c", 0, "")
+	showAlpha := flag.Bool("A", false, "")
+	alphaQuiz := flag.Bool("a", false, "")
+	orderMode := flag.Bool("o", false, "")
 	flag.Usage = usage
 	flag.Parse()
 
@@ -171,8 +178,29 @@ func main() {
 		os.Exit(2)
 	}
 
+	if (*showAlpha || *alphaQuiz) && (set["s"] || set["r"] || set["e"]) {
+		fmt.Fprintln(os.Stderr, "-s, -r and -e are for the word quiz; they can't be used with -A or -a")
+		os.Exit(2)
+	}
+	if *orderMode && !*alphaQuiz {
+		fmt.Fprintln(os.Stderr, "-o goes with -a: use rquiz2 -a -o")
+		os.Exit(2)
+	}
+
 	rand.Seed(time.Now().UnixNano())
 	reader := bufio.NewReader(os.Stdin)
+
+	switch {
+	case *showAlpha:
+		showAlphabet()
+		return
+	case *alphaQuiz && *orderMode:
+		orderQuiz(reader, *count)
+		return
+	case *alphaQuiz:
+		letterQuiz(reader, *count)
+		return
+	}
 
 	sequential := set["s"]
 	start := 1
@@ -256,7 +284,10 @@ func main() {
 		fmt.Printf("Meaning: %s\n", meanings(e))
 		fmt.Printf("Pronunciation: %s  [%s]\n\n", e.russian, e.pronunciation)
 	}
+	finalScore(score, asked)
+}
 
+func finalScore(score, asked int) {
 	fmt.Println("=== Quiz over ===")
 	if asked > 0 {
 		fmt.Printf("Final score: %d/%d (%.0f%%)\n", score, asked, float64(score)/float64(asked)*100)
