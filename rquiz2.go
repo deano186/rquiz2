@@ -5,7 +5,9 @@
 // the free version of Claude on claude.ai. On November 13, 2026, Claude
 // Opus 5.5 (model ID claude-opus-5-5), working in Claude Code, expanded it
 // with pronunciation guides, stress marks, lookalike-word hints, the 2000
-// most common Russian words, and the -s/-r/-e/-c options.
+// most common Russian words, and the -s/-r/-e/-c options. The same day,
+// Claude Opus 5.5 added the alphabet table (-A) and alphabet quizzes (-a),
+// and the Windows and Android builds.
 //
 // With help from Dean Hathaway, who came up with the ideas, tested it,
 // and wrote rquiz, the Bash quiz this one grew out of. (Dean helped. A
