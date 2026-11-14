@@ -216,12 +216,14 @@ func main() {
 
 	order := pickOrder(start, *end, n, sequential)
 	n = len(order)
-	mode := "random"
-	if sequential {
-		mode = "in order"
-	}
-	if len(set) > 0 {
-		fmt.Printf("%d questions from words %d-%d, %s.\n\n", n, start, *end, mode)
+	if len(set) > 0 && n > 0 {
+		if sequential {
+			// In order, the quiz stops after n words, which may be
+			// before the end of the range.
+			fmt.Printf("%d questions: words %d-%d, in order.\n\n", n, start, start+n-1)
+		} else {
+			fmt.Printf("%d questions from words %d-%d, random.\n\n", n, start, *end)
+		}
 	}
 	score, asked := 0, 0
 
