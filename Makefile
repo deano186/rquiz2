@@ -1,6 +1,10 @@
-.DEFAULT_GOAL := build
+.DEFAULT_GOAL := all
 
-.PHONY: clean fmt vet build android windows
+.PHONY: all clean fmt vet build android windows
+
+# Build every version: Linux, Android and Windows
+all: build android windows
+
 clean:
 	go clean ./...
 	rm -f rquiz2-android rquiz2.exe
