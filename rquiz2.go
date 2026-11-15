@@ -1,5 +1,5 @@
 // rquiz2 - a Russian vocabulary quiz.
-// Ver.20261113c
+// Ver.20261115a
 //
 // Written by Claude, Anthropic's AI assistant. The first version came from
 // the free version of Claude on claude.ai. On November 13, 2026, Claude
@@ -76,10 +76,16 @@ func meanings(e entry) string {
 // The answer "eat" also matches "to eat", and "to eat" matches "eat".
 // The word list is in frequency order, so the first matches found are the
 // most common words; at most maxHints of them are returned.
+// A blank answer gets no hints: there is no guess to compare.
 const maxHints = 3
 
 func lookalikes(input string, current entry) []entry {
 	in := normalize(input)
+	if in == "" {
+		// Without this, the form "to " below would match words that
+		// mean "to" (like к), as if the user had typed "to".
+		return nil
+	}
 	forms := []string{in, "to " + in, strings.TrimPrefix(in, "to ")}
 	var found []entry
 	for _, e := range words {
@@ -223,13 +229,13 @@ func main() {
 		os.Exit(2)
 	}
 
-	fmt.Println("=== Russian Vocabulary Quiz ===")
-	fmt.Println("Type the English translation of each Russian word.")
-	fmt.Println("Type 'quit' to stop, or 'skip' to skip a word.")
-	fmt.Println("The accent mark (´) shows which vowel is stressed.")
-	fmt.Println("After each answer you'll see how to say the word:")
-	fmt.Println("  CAPITALS = stressed syllable, ' = soft consonant.")
-	fmt.Println()
+	// fmt.Println("=== Russian Vocabulary Quiz ===")
+	// fmt.Println("Type the English translation of each Russian word.")
+	// fmt.Println("Type 'quit' to stop, or 'skip' to skip a word.")
+	// fmt.Println("The accent mark (´) shows which vowel is stressed.")
+	// fmt.Println("After each answer you'll see how to say the word:")
+	// fmt.Println("  CAPITALS = stressed syllable, ' = soft consonant.")
+	// fmt.Println()
 
 	n := *count
 	if len(set) == 0 {
