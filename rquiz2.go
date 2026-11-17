@@ -1,5 +1,5 @@
 // rquiz2 - a Russian vocabulary quiz.
-// Ver.20261115a
+// Ver.20261116h
 //
 // Written by Claude, Anthropic's AI assistant. The first version came from
 // the free version of Claude on claude.ai. On November 13, 2026, Claude
@@ -7,7 +7,16 @@
 // with pronunciation guides, stress marks, lookalike-word hints, the 2000
 // most common Russian words, and the -s/-r/-e/-c options. The same day,
 // Claude Opus 5.5 added the alphabet table (-A) and alphabet quizzes (-a),
-// and the Windows and Android builds.
+// and the Windows and Android builds. On November 16, 2026, Claude Opus 5.5
+// limited the meanings shown after each answer to the 4 most important
+// ones (all are still accepted) and reordered the word list to match.
+// The same day, it changed the quit command to q, so "quit" and "exit"
+// can be answered as meanings, and made a blank answer (just Enter) skip
+// the word, so "skip" can be a meaning too (of пропусти́ть, now added).
+// Then it made a run with no options ask the first 10 words in order, as
+// the original rquiz did, and ended each run with a pointer to rquiz2 -h.
+// It also added praise, picked at random, for a final score of 95% or more,
+// including the original rquiz's "Хоро́шая рабо́та!"
 //
 // With help from Dean Hathaway, who came up with the ideas, tested it,
 // and wrote rquiz, the Bash quiz this one grew out of. (Dean helped. A
@@ -50,6 +59,10 @@ func correct(input string, e entry) bool {
 // meanings returns the English translations for display, leaving out
 // variants that only exist so more answers are accepted: "eat" when
 // "to eat" is listed, digits like "1", and "youre" spellings of "you're".
+// At most maxMeanings are shown, so each word's answers in words.go list
+// its most important meanings first. Every answer is still accepted.
+const maxMeanings = 4
+
 func meanings(e entry) string {
 	listed := map[string]bool{}
 	for _, a := range e.answers {
@@ -67,6 +80,9 @@ func meanings(e entry) string {
 		}
 		seen[key] = true
 		shown = append(shown, a)
+		if len(shown) == maxMeanings {
+			break
+		}
 	}
 	return strings.Join(shown, ", ")
 }
@@ -76,7 +92,8 @@ func meanings(e entry) string {
 // The answer "eat" also matches "to eat", and "to eat" matches "eat".
 // The word list is in frequency order, so the first matches found are the
 // most common words; at most maxHints of them are returned.
-// A blank answer gets no hints: there is no guess to compare.
+// A blank answer gets no hints: there is no guess to compare. (The quiz
+// treats a blank answer as a skip, so this is just a safeguard.)
 const maxHints = 3
 
 func lookalikes(input string, current entry) []entry {
@@ -125,8 +142,8 @@ Options:
   -a -o  alphabet order quiz: find the Nth letter of the alphabet in a word
   -h     show this help
 
-With no options, it asks how many questions you want and picks them at
-random from the whole list.
+With no options, it asks the 10 most common words, in order (the same
+as rquiz2 -s 1 -c 10).
 
 Examples:
   rquiz2 -s 1 -c 10     the 10 most common words, in order
@@ -136,8 +153,8 @@ Examples:
                         25 random words from words 50-250
   rquiz2 -a -c 10       10 random letters of the alphabet
 
-During the quiz, type the English meaning, 'skip' to skip a word, or
-'quit' to stop. Typing "to" before a verb is optional.
+During the quiz, type the English meaning, or 'q' to quit. Press Enter
+with nothing typed to skip a word. Typing "to" before a verb is optional.
 
 Suggestion: learn a small range first (e.g. -r 1 -e 20), then widen it
 (-r 1 -e 30, and so on).
@@ -211,7 +228,10 @@ func main() {
 		return
 	}
 
-	sequential := set["s"]
+	// With no options at all, ask the first 10 words in order, as the
+	// original rquiz did.
+	noOptions := len(set) == 0
+	sequential := set["s"] || noOptions
 	start := 1
 	if set["s"] {
 		start = *seqStart
@@ -231,29 +251,22 @@ func main() {
 
 	// fmt.Println("=== Russian Vocabulary Quiz ===")
 	// fmt.Println("Type the English translation of each Russian word.")
-	// fmt.Println("Type 'quit' to stop, or 'skip' to skip a word.")
+	// fmt.Println("Type 'q' to quit, or press Enter to skip a word.")
 	// fmt.Println("The accent mark (´) shows which vowel is stressed.")
 	// fmt.Println("After each answer you'll see how to say the word:")
 	// fmt.Println("  CAPITALS = stressed syllable, ' = soft consonant.")
 	// fmt.Println()
 
 	n := *count
-	if len(set) == 0 {
-		// No options: ask how many questions, as before.
-		fmt.Printf("How many questions? (1-%d, default 10): ", len(words))
-		line, _ := reader.ReadString('\n')
+	if noOptions {
 		n = 10
-		if v, err := strconv.Atoi(strings.TrimSpace(line)); err == nil && v > 0 {
-			n = v
-		}
-		fmt.Println()
 	} else if n <= 0 {
 		n = *end - start + 1
 	}
 
 	order := pickOrder(start, *end, n, sequential)
 	n = len(order)
-	if len(set) > 0 && n > 0 {
+	if n > 0 {
 		if sequential {
 			// In order, the quiz stops after n words, which may be
 			// before the end of the range.
@@ -273,12 +286,12 @@ func main() {
 			fmt.Println()
 			break
 		}
-		if answer == "quit" || answer == "exit" {
+		if answer == "q" {
 			break
 		}
 		asked++
 		switch {
-		case answer == "skip":
+		case answer == "":
 			fmt.Println("Skipped.")
 		case correct(answer, e):
 			score++
@@ -296,11 +309,36 @@ func main() {
 	finalScore(score, asked)
 }
 
+// A final score of highScore percent or better gets one of these, picked
+// at random.
+const highScore = 95
+
+var praise = []string{
+	"Хоро́шая рабо́та! (Good work!)",
+	"Молоде́ц! (Well done!)",
+	"Отли́чно! (Excellent!)",
+	"Здо́рово! (Great!)",
+	"Great job! Your Russian is coming along.",
+	"Impressive! Keep it up.",
+	"Superb work!",
+}
+
 func finalScore(score, asked int) {
 	fmt.Println("=== Quiz over ===")
 	if asked > 0 {
-		fmt.Printf("Final score: %d/%d (%.0f%%)\n", score, asked, float64(score)/float64(asked)*100)
+		pct := float64(score) / float64(asked) * 100
+		fmt.Printf("Final score: %d/%d (%.0f%%)\n", score, asked, pct)
+		if pct >= highScore {
+			fmt.Println(praise[rand.Intn(len(praise))])
+		}
 	} else {
 		fmt.Println("No questions answered.")
 	}
+	optionsBanner()
+}
+
+// optionsBanner ends each run with a reminder of where the options are.
+func optionsBanner() {
+	fmt.Println()
+	fmt.Println("For options: rquiz2 -h")
 }

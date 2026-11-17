@@ -25,8 +25,10 @@ Pronunciation: в  [v]
 
 ## Usage
 
-Run `rquiz2` with no options and it asks how many questions you want, then
-picks them at random from the whole list. Options let you choose the words:
+Run `rquiz2` with no options and it asks the 10 most common words, in
+order, like the original rquiz (the same as `rquiz2 -s 1 -c 10`). Each run
+ends with a reminder that `rquiz2 -h` lists the options. Options let you
+choose the words:
 
 | Option | Meaning |
 |--------|---------|
@@ -45,7 +47,7 @@ rquiz2 -r 1 -e 40        # words 1-40 in random order
 rquiz2 -r 50 -e 250 -c 25  # 25 random words from words 50-250
 ```
 
-During the quiz, type `skip` to skip a word or `quit` to stop. Typing "to"
+During the quiz, press Enter to skip a word or type `q` to quit. Typing "to"
 before a verb is optional.
 
 ### Learning the alphabet

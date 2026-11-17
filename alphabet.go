@@ -111,6 +111,7 @@ func shortMeaning(e entry, n int) string {
 }
 
 func showAlphabet() {
+	defer optionsBanner()
 	width := 0
 	for _, l := range alphabet {
 		width = max(width, len(l.like))
@@ -144,7 +145,7 @@ func letterQuiz(reader *bufio.Reader, count int) {
 	fmt.Println("=== Russian Alphabet Quiz ===")
 	fmt.Println("Type the sound each letter makes, in English letters (e.g. zh).")
 	fmt.Println("For Ъ and Ь, type 'hard sign' or 'soft sign'.")
-	fmt.Println("Type 'quit' to stop, or 'skip' to skip a letter.")
+	fmt.Println("Type 'q' to quit, or press Enter to skip a letter.")
 	fmt.Println()
 
 	score, asked := 0, 0
@@ -157,12 +158,12 @@ func letterQuiz(reader *bufio.Reader, count int) {
 			fmt.Println()
 			break
 		}
-		if answer == "quit" || answer == "exit" {
+		if answer == "q" {
 			break
 		}
 		asked++
 		switch {
-		case answer == "skip":
+		case answer == "":
 			fmt.Println("Skipped.")
 		case hasSound(l, answer):
 			score++
@@ -242,7 +243,7 @@ func orderQuiz(reader *bufio.Reader, count int) {
 	}
 	fmt.Println("=== Russian Alphabet Order Quiz ===")
 	fmt.Println("For each number, think of that letter of the alphabet, then type")
-	fmt.Println("its position in the word shown. Type 'quit' to stop, or 'skip'.")
+	fmt.Println("its position in the word shown. Type 'q' to quit, or Enter to skip.")
 	fmt.Println()
 
 	score, asked := 0, 0
@@ -258,12 +259,12 @@ func orderQuiz(reader *bufio.Reader, count int) {
 			fmt.Println()
 			break
 		}
-		if answer == "quit" || answer == "exit" {
+		if answer == "q" {
 			break
 		}
 		asked++
 		switch n, _ := strconv.Atoi(answer); {
-		case answer == "skip":
+		case answer == "":
 			fmt.Println("Skipped.")
 		case n == pos:
 			score++
