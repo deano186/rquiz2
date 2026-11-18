@@ -111,7 +111,6 @@ func shortMeaning(e entry, n int) string {
 }
 
 func showAlphabet() {
-	defer optionsBanner()
 	width := 0
 	for _, l := range alphabet {
 		width = max(width, len(l.like))
@@ -145,7 +144,7 @@ func letterQuiz(reader *bufio.Reader, count int) {
 	fmt.Println("=== Russian Alphabet Quiz ===")
 	fmt.Println("Type the sound each letter makes, in English letters (e.g. zh).")
 	fmt.Println("For Ъ and Ь, type 'hard sign' or 'soft sign'.")
-	fmt.Println("Type 'q' to quit, or press Enter to skip a letter.")
+	fmt.Println("Type q to quit.")
 	fmt.Println()
 
 	score, asked := 0, 0
@@ -163,8 +162,6 @@ func letterQuiz(reader *bufio.Reader, count int) {
 		}
 		asked++
 		switch {
-		case answer == "":
-			fmt.Println("Skipped.")
 		case hasSound(l, answer):
 			score++
 			fmt.Printf("Correct! Score: %d\n", score)
@@ -182,7 +179,23 @@ func letterQuiz(reader *bufio.Reader, count int) {
 		}
 		fmt.Printf("Example: %s [%s] means %s.\n\n", e.russian, e.pronunciation, shortMeaning(e, 2))
 	}
-	finalScore(score, asked)
+	alphabetScore(score, asked)
+}
+
+// alphabetScore ends an alphabet quiz with the score, and praise for a
+// high one.
+func alphabetScore(score, asked int) {
+	fmt.Println("=== Quiz over ===")
+	if asked == 0 {
+		fmt.Println("No questions answered.")
+		return
+	}
+	pct := float64(score) / float64(asked) * 100
+	fmt.Printf("SCORE: %d/%d (%.0f%%)\n", score, asked, pct)
+	if pct >= highScore {
+		fmt.Printf("\n  - %s -\n", randomPraise())
+	}
+	fmt.Println()
 }
 
 func hasSound(l letter, answer string) bool {
@@ -243,7 +256,7 @@ func orderQuiz(reader *bufio.Reader, count int) {
 	}
 	fmt.Println("=== Russian Alphabet Order Quiz ===")
 	fmt.Println("For each number, think of that letter of the alphabet, then type")
-	fmt.Println("its position in the word shown. Type 'q' to quit, or Enter to skip.")
+	fmt.Println("its position in the word shown. Type q to quit.")
 	fmt.Println()
 
 	score, asked := 0, 0
@@ -264,8 +277,6 @@ func orderQuiz(reader *bufio.Reader, count int) {
 		}
 		asked++
 		switch n, _ := strconv.Atoi(answer); {
-		case answer == "":
-			fmt.Println("Skipped.")
 		case n == pos:
 			score++
 			fmt.Printf("Correct! Score: %d\n", score)
@@ -281,5 +292,5 @@ func orderQuiz(reader *bufio.Reader, count int) {
 		}
 		fmt.Printf("Alphabet so far: %s\n\n", strings.Join(sofar, " "))
 	}
-	finalScore(score, asked)
+	alphabetScore(score, asked)
 }

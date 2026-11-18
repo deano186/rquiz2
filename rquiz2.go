@@ -1,29 +1,11 @@
-// rquiz2 - a Russian vocabulary quiz.
-// Ver.20261116h
+// rquiz2 - a Russian vocabulary quiz
+// Version: see the VERSION constant below (rquiz2 -v shows it).
 //
-// Written by Claude, Anthropic's AI assistant. The first version came from
-// the free version of Claude on claude.ai. On November 13, 2026, Claude
-// Opus 5.5 (model ID claude-opus-5-5), working in Claude Code, expanded it
-// with pronunciation guides, stress marks, lookalike-word hints, the 2000
-// most common Russian words, and the -s/-r/-e/-c options. The same day,
-// Claude Opus 5.5 added the alphabet table (-A) and alphabet quizzes (-a),
-// and the Windows and Android builds. On November 16, 2026, Claude Opus 5.5
-// limited the meanings shown after each answer to the 4 most important
-// ones (all are still accepted) and reordered the word list to match.
-// The same day, it changed the quit command to q, so "quit" and "exit"
-// can be answered as meanings, and made a blank answer (just Enter) skip
-// the word, so "skip" can be a meaning too (of пропусти́ть, now added).
-// Then it made a run with no options ask the first 10 words in order, as
-// the original rquiz did, and ended each run with a pointer to rquiz2 -h.
-// It also added praise, picked at random, for a final score of 95% or more,
-// including the original rquiz's "Хоро́шая рабо́та!"
+// Mostly written by AI (model ID claude-opus-5-5)
+// Directed by and based on prior work by: deano (deano186@gmail.com)
 //
-// With help from Dean Hathaway, who came up with the ideas, tested it,
-// and wrote rquiz, the Bash quiz this one grew out of. (Dean helped. A
-// lot. Mostly by telling Claude what to do.)
-//
-// Originally named clauderquiz as a prototype; renamed rquiz2 as the
-// successor to rquiz.
+// On November 18, 2026, Claude Opus 5.5 (claude-opus-5-5), in Claude Code,
+// added the -v option and moved the version into the VERSION constant.
 
 package main
 
@@ -33,9 +15,20 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+)
+
+// VERSION is the program version, shown by rquiz2 -v: Ver.YYYYMMDDx,
+// the date of the update and a letter that starts at a for each day.
+// Update it here, and only here, with every change. AI names the model
+// that made the latest change.
+const (
+	VERSION = "Ver.20261118d"
+	AI      = "Claude Opus 5.5 (model ID claude-opus-5-5), in Claude Code"
 )
 
 func normalize(s string) string {
@@ -43,75 +36,145 @@ func normalize(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-func correct(input string, e entry) bool {
-	in := normalize(input)
-	if in == "" {
-		return false
-	}
+// clean is normalize for typed meanings: it also turns anything but
+// letters, digits, apostrophes and hyphens into spaces, so stray
+// punctuation like "home." or "(house)" doesn't make an answer wrong.
+func clean(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '\'' || r == '-' {
+			return r
+		}
+		return ' '
+	}, s)
+	return normalize(s)
+}
+
+// maxParts is the most meanings an answer may have, as in rquiz; anything
+// after the fourth comma is ignored. It is also the most meanings shown
+// for a word, so the answers in words.go list the most important first.
+const maxParts = 4
+
+// shown returns the English meanings of a word, as displayed and as
+// expected in a complete answer. It leaves out variants that only exist so
+// more answers are accepted: "eat" when "to eat" is listed, digits like
+// "1", and "youre" spellings of "you're". Every answer is still accepted.
+func shown(e entry) []string {
+	listed := map[string]bool{}
 	for _, a := range e.answers {
-		if in == a {
+		listed[a] = true
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, a := range e.answers {
+		k := key(a)
+		if seen[k] || listed["to "+a] {
+			continue
+		}
+		if _, err := strconv.Atoi(a); err == nil {
+			continue
+		}
+		seen[k] = true
+		out = append(out, a)
+		if len(out) == maxParts {
+			break
+		}
+	}
+	return out
+}
+
+func meanings(e entry) string {
+	return strings.Join(shown(e), ", ")
+}
+
+// key is the form of a meaning used to tell whether two are the same:
+// "to eat" and "eat" are one meaning, and so are "you're" and "youre".
+func key(a string) string {
+	return strings.ReplaceAll(strings.TrimPrefix(a, "to "), "'", "")
+}
+
+// accepted reports whether one typed meaning is right for the word.
+// "to" before a verb is optional either way.
+func accepted(part string, e entry) bool {
+	for _, a := range e.answers {
+		if part == a || "to "+part == a || strings.TrimPrefix(part, "to ") == a {
 			return true
 		}
 	}
 	return false
 }
 
-// meanings returns the English translations for display, leaving out
-// variants that only exist so more answers are accepted: "eat" when
-// "to eat" is listed, digits like "1", and "youre" spellings of "you're".
-// At most maxMeanings are shown, so each word's answers in words.go list
-// its most important meanings first. Every answer is still accepted.
-const maxMeanings = 4
-
-func meanings(e entry) string {
-	listed := map[string]bool{}
-	for _, a := range e.answers {
-		listed[a] = true
-	}
-	var shown []string
-	seen := map[string]bool{}
-	for _, a := range e.answers {
-		key := strings.ReplaceAll(a, "'", "")
-		if seen[key] || listed["to "+a] {
-			continue
-		}
-		if _, err := strconv.Atoi(a); err == nil {
-			continue
-		}
-		seen[key] = true
-		shown = append(shown, a)
-		if len(shown) == maxMeanings {
+// parts splits an answer at its commas into up to maxParts meanings.
+// Extra info written as --text, as rquiz showed it, is ignored.
+func parts(answer string) []string {
+	var out []string
+	for i, p := range strings.Split(answer, ",") {
+		if i == maxParts {
 			break
 		}
+		p = clean(p)
+		if p != "" && !strings.HasPrefix(p, "-") {
+			out = append(out, p)
+		}
 	}
-	return strings.Join(shown, ", ")
+	return out
 }
 
-// lookalikes returns the other quiz words that the English answer
-// belongs to, e.g. "dog" when the question was кошка returns собака.
-// The answer "eat" also matches "to eat", and "to eat" matches "eat".
-// The word list is in frequency order, so the first matches found are the
-// most common words; at most maxHints of them are returned.
-// A blank answer gets no hints: there is no guess to compare. (The quiz
-// treats a blank answer as a skip, so this is just a safeguard.)
-const maxHints = 3
+type result int
 
-func lookalikes(input string, current entry) []entry {
-	in := normalize(input)
-	if in == "" {
-		// Without this, the form "to " below would match words that
-		// mean "to" (like к), as if the user had typed "to".
-		return nil
+const (
+	noAnswer result = iota
+	wrong
+	partial
+	complete
+)
+
+// grade marks an answer. It is complete when it names every shown meaning
+// (in any order) and nothing wrong; partial when at least one meaning is
+// right; wrong when none is. It also returns the meanings that were wrong.
+func grade(answer string, e entry) (result, []string) {
+	ps := parts(answer)
+	if len(ps) == 0 {
+		return noAnswer, nil
 	}
-	forms := []string{in, "to " + in, strings.TrimPrefix(in, "to ")}
-	var found []entry
-	for _, e := range words {
+	need := map[string]bool{}
+	for _, m := range shown(e) {
+		need[key(m)] = true
+	}
+	covered := map[string]bool{}
+	var bad []string
+	for _, p := range ps {
+		if !accepted(p, e) {
+			bad = append(bad, p)
+			continue
+		}
+		if need[key(p)] {
+			covered[key(p)] = true
+		}
+	}
+	switch {
+	case len(bad) == len(ps):
+		return wrong, bad
+	case len(bad) == 0 && len(covered) == len(need):
+		return complete, nil
+	}
+	return partial, bad
+}
+
+// lookalikes returns the other quiz words that a wrong meaning belongs to,
+// e.g. "cat" when the question was собака returns ко́шка. The word list is
+// in frequency order, so the first matches found are the most common
+// words; at most maxHints of them are returned.
+const maxHints = 2
+
+func lookalikes(bad []string, current entry) []int {
+	var found []int
+	for i, e := range words {
 		if e.russian == current.russian {
 			continue
 		}
-		for _, f := range forms {
-			if correct(f, e) {
-				found = append(found, e)
+		for _, p := range bad {
+			if p != "to" && accepted(p, e) {
+				found = append(found, i)
 				break
 			}
 		}
@@ -122,90 +185,172 @@ func lookalikes(input string, current entry) []entry {
 	return found
 }
 
-func usage() {
-	out := flag.CommandLine.Output()
-	fmt.Fprintf(out, `rquiz2 - Russian vocabulary quiz (%d words)
-
-Shows Russian words and asks for their English meaning. The words are
-numbered 1-%d, most commonly used first. Words 1-2000 follow the New
-Frequency Dictionary of Russian (Lyashevskaya & Sharoff, 2009).
-
-Usage: rquiz2 [options]
-
-Options:
-  -s N   sequential: ask words in order, starting at word N
-  -r N   random: ask words in random order, from word N onwards
-  -e N   end: stop at word N (use with -s or -r)
-  -c N   count: ask N questions (default: every word in the range)
-  -A     show the Russian alphabet, with sounds and example words
-  -a     alphabet quiz: see each letter, type its sound (use -c for fewer)
-  -a -o  alphabet order quiz: find the Nth letter of the alphabet in a word
-  -h     show this help
-
-With no options, it asks the 10 most common words, in order (the same
-as rquiz2 -s 1 -c 10).
-
-Examples:
-  rquiz2 -s 1 -c 10     the 10 most common words, in order
-  rquiz2 -r 1 -e 40     words 1-40 in random order
-  rquiz2 -s 100         from word 100 to the end, in order
-  rquiz2 -r 50 -e 250 -c 25
-                        25 random words from words 50-250
-  rquiz2 -a -c 10       10 random letters of the alphabet
-
-During the quiz, type the English meaning, or 'q' to quit. Press Enter
-with nothing typed to skip a word. Typing "to" before a verb is optional.
-
-Suggestion: learn a small range first (e.g. -r 1 -e 20), then widen it
-(-r 1 -e 30, and so on).
-`, len(words), len(words))
+// describe is how a word is shown in answers and lists:
+// "[12] э́то: this, it, this is, that  [EH-tuh]".
+func describe(i int) string {
+	e := words[i]
+	return fmt.Sprintf("[%d] %s: %s  [%s]", i+1, e.russian, meanings(e), e.pronunciation)
 }
 
-// pickOrder returns the list positions (0-based) of the words to ask, in
-// the order to ask them. start and end are 1-based word numbers.
-func pickOrder(start, end, count int, sequential bool) []int {
-	size := end - start + 1
-	if count > size {
-		count = size
+// cyrillicOrder sorts the word list into Russian alphabetical order for
+// -C, ignoring stress marks and putting ё right after е.
+func cyrillicOrder() {
+	rank := map[rune]int{}
+	for i, l := range alphabet {
+		rank[[]rune(l.lower)[0]] = i + 1
 	}
-	order := make([]int, count)
-	if sequential {
-		for i := range order {
-			order[i] = start - 1 + i
+	sortKey := func(s string) []int {
+		var k []int
+		for _, r := range plain(strings.ToLower(s)) {
+			k = append(k, rank[r])
 		}
-		return order
+		return k
 	}
-	for i, p := range rand.Perm(size)[:count] {
-		order[i] = start - 1 + p
+	sort.SliceStable(words, func(a, b int) bool {
+		ka, kb := sortKey(words[a].russian), sortKey(words[b].russian)
+		for i := 0; i < len(ka) && i < len(kb); i++ {
+			if ka[i] != kb[i] {
+				return ka[i] < kb[i]
+			}
+		}
+		return len(ka) < len(kb)
+	})
+}
+
+// find prints the words that have the given English word in their
+// meanings, for -f. It searches every accepted answer, so when the match
+// is one that isn't shown (past the first 4), it adds it as "(also: ...)".
+func find(what string) {
+	what = clean(what)
+	n := 0
+	for i, e := range words {
+		inShown := map[string]bool{}
+		for _, m := range shown(e) {
+			inShown[key(m)] = true
+		}
+		found := false
+		var also []string
+		for _, a := range e.answers {
+			if strings.Contains(" "+a+" ", " "+what+" ") {
+				found = true
+				if !inShown[key(a)] {
+					also = append(also, a)
+					inShown[key(a)] = true
+				}
+			}
+		}
+		if !found {
+			continue
+		}
+		line := "Found " + describe(i)
+		if len(also) > 0 {
+			line += "  (also: " + strings.Join(also, ", ") + ")"
+		}
+		fmt.Println(line)
+		n++
 	}
-	return order
+	if n == 0 {
+		fmt.Printf("No words have %q in their meanings.\n", what)
+	}
+}
+
+func usage() {
+	fmt.Printf(`rquiz2 - shows Russian words and asks for 1 to 4 English meanings,
+	separated by commas. The Russian words are numbered in usage order, 
+	most common first.
+
+  rquiz2              Easy Mode: the same as rquiz2 -s 1 -c 10 -p -m
+                      (the 10 most frequently used words in order)
+  rquiz2 -r 1         Hard Mode: random words from the whole list, until
+                      all are used or you type q
+  rquiz2 -s 100       words in order, starting at word 100, until q or
+                      the end of the list
+  rquiz2 -r 1 -e 40   random words from 1-40, until all are used or q
+  rquiz2 -r 50 -e 250 -c 25
+                      25 random words from 50-250, or until q
+  rquiz2 -C           use Russian alphabetical (Cyrillic) order instead
+                      of frequency order
+  rquiz2 -p           show how many parts the expected answer has
+  rquiz2 -m           Easy Match: a partial answer counts as complete
+  rquiz2 -f high      find Russian words with "high" in English meanings
+  rquiz2 -A           show the Russian alphabet, with sounds and examples
+  rquiz2 -a           alphabet quiz: type the sound of each letter
+  rquiz2 -a -o        alphabet order quiz: find the Nth letter in a word
+  rquiz2 -v           show the program version and AI version
+  rquiz2 -h           show this help
+
+Answers can have up to 4 meanings, separated by commas, in any order.
+Anything after a fourth comma is ignored. "to" before a verb is
+optional. Type q to quit.
+
+  Example question:   ка́ждый
+  Example answer:     each, every
+
+After each answer you'll see the meanings and how to say the word:
+CAPITALS mark the stressed syllable, and ' marks a soft consonant.
+
+Scoring: a complete answer +1, a partial answer +1/2, no answer -1, a
+wrong answer -1 1/2. A wrong, missing or partial answer also gets a
+short pause.
+
+Suggestion: cover a small range of words repeatedly, then widen it:
+  rquiz2 -s 1 -e 20, then (after learning those) rquiz2 -s 1 -e 30
+  rquiz2 -r 1 -e 20, then rquiz2 -r 1 -e 30, and so on
+
+There are currently [ %d ] words in the quiz.
+`, len(words))
+}
+
+// splitFlags lets single-letter switches be run together as in rquiz,
+// so -pm means -p -m.
+func splitFlags(args []string) []string {
+	var out []string
+	for _, a := range args {
+		if len(a) > 2 && a[0] == '-' && strings.Trim(a[1:], "CAaopmhv") == "" {
+			for _, c := range a[1:] {
+				out = append(out, "-"+string(c))
+			}
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
 }
 
 func main() {
 	seqStart := flag.Int("s", 0, "")
 	randStart := flag.Int("r", 0, "")
-	end := flag.Int("e", len(words), "")
+	end := flag.Int("e", 0, "")
 	count := flag.Int("c", 0, "")
+	cyrillic := flag.Bool("C", false, "")
+	showParts := flag.Bool("p", false, "")
+	easyMatch := flag.Bool("m", false, "")
+	search := flag.String("f", "", "")
 	showAlpha := flag.Bool("A", false, "")
 	alphaQuiz := flag.Bool("a", false, "")
 	orderMode := flag.Bool("o", false, "")
+	showVersion := flag.Bool("v", false, "")
+	flag.CommandLine.SetOutput(os.Stdout)
 	flag.Usage = usage
-	flag.Parse()
+	flag.CommandLine.Parse(splitFlags(os.Args[1:]))
+
+	if *showVersion {
+		fmt.Printf("rquiz2 %s\nWritten by %s\nDirected by and based on prior work by: deano (deano186@gmail.com).\n", VERSION, AI)
+		return
+	}
 
 	set := map[string]bool{}
 	flag.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	if flag.NArg() > 0 {
-		fmt.Fprintf(os.Stderr, "unexpected argument: %s\n\n", flag.Arg(0))
-		usage()
+		fmt.Fprintf(os.Stderr, "unexpected argument: %s (see rquiz2 -h)\n", flag.Arg(0))
 		os.Exit(2)
 	}
 	if set["s"] && set["r"] {
-		fmt.Fprintln(os.Stderr, "use -s (sequential) or -r (random), not both")
+		fmt.Fprintln(os.Stderr, "use -s (in order) or -r (random), not both")
 		os.Exit(2)
 	}
-
-	if (*showAlpha || *alphaQuiz) && (set["s"] || set["r"] || set["e"]) {
-		fmt.Fprintln(os.Stderr, "-s, -r and -e are for the word quiz; they can't be used with -A or -a")
+	if (*showAlpha || *alphaQuiz) && (set["s"] || set["r"] || set["e"] || set["C"]) {
+		fmt.Fprintln(os.Stderr, "-s, -r, -e and -C are for the word quiz; they can't be used with -A or -a")
 		os.Exit(2)
 	}
 	if *orderMode && !*alphaQuiz {
@@ -215,6 +360,7 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 	reader := bufio.NewReader(os.Stdin)
+	fmt.Println()
 
 	switch {
 	case *showAlpha:
@@ -228,88 +374,151 @@ func main() {
 		return
 	}
 
-	// With no options at all, ask the first 10 words in order, as the
-	// original rquiz did.
-	noOptions := len(set) == 0
-	sequential := set["s"] || noOptions
-	start := 1
-	if set["s"] {
+	if *cyrillic {
+		cyrillicOrder()
+	}
+	if set["f"] {
+		find(*search)
+		return
+	}
+
+	// With no options (other than -C), use Easy Mode, as rquiz did: the
+	// first 10 words in order, with the parts hint and Easy Match.
+	easyMode := !(set["s"] || set["r"] || set["e"] || set["c"] || set["p"] || set["m"])
+	start, sequential := 1, true
+	n := *count
+	switch {
+	case easyMode:
+		n, *showParts, *easyMatch = 10, true, true
+	case set["s"]:
 		start = *seqStart
-	} else if set["r"] {
-		start = *randStart
+	case set["r"]:
+		start, sequential = *randStart, false
 	}
-	if start < 1 {
-		start = 1
+	start = max(start, 1)
+	last := len(words)
+	if set["e"] && *end < last {
+		last = *end
 	}
-	if *end > len(words) {
-		*end = len(words)
-	}
-	if start > *end {
-		fmt.Fprintf(os.Stderr, "start word %d is after end word %d (there are %d words)\n", start, *end, len(words))
+	if start > last {
+		fmt.Fprintf(os.Stderr, "start word %d is after end word %d (there are %d words)\n", start, last, len(words))
 		os.Exit(2)
 	}
-
-	// fmt.Println("=== Russian Vocabulary Quiz ===")
-	// fmt.Println("Type the English translation of each Russian word.")
-	// fmt.Println("Type 'q' to quit, or press Enter to skip a word.")
-	// fmt.Println("The accent mark (´) shows which vowel is stressed.")
-	// fmt.Println("After each answer you'll see how to say the word:")
-	// fmt.Println("  CAPITALS = stressed syllable, ' = soft consonant.")
-	// fmt.Println()
-
-	n := *count
-	if noOptions {
-		n = 10
-	} else if n <= 0 {
-		n = *end - start + 1
+	size := last - start + 1
+	if n <= 0 || n > size {
+		n = size
 	}
-
-	order := pickOrder(start, *end, n, sequential)
-	n = len(order)
-	if n > 0 {
-		if sequential {
-			// In order, the quiz stops after n words, which may be
-			// before the end of the range.
-			fmt.Printf("%d questions: words %d-%d, in order.\n\n", n, start, start+n-1)
-		} else {
-			fmt.Printf("%d questions from words %d-%d, random.\n\n", n, start, *end)
+	order := make([]int, n)
+	for i := range order {
+		order[i] = start - 1 + i
+	}
+	if !sequential {
+		for i, p := range rand.Perm(size)[:n] {
+			order[i] = start - 1 + p
 		}
 	}
-	score, asked := 0, 0
+
+	quiz(reader, order, *showParts, *easyMatch, easyMode)
+}
+
+// quiz asks the words at the given list positions and scores the answers.
+// The score is kept in half points.
+func quiz(reader *bufio.Reader, order []int, showParts, easyMatch, easyMode bool) {
+	halves, asked := 0, 0
+	type miss struct {
+		word   int
+		answer string
+	}
+	var missed []miss
 
 	for i, idx := range order {
 		e := words[idx]
-		fmt.Printf("[%d/%d] #%d  %s\n> ", i+1, n, idx+1, e.russian)
-		line, err := reader.ReadString('\n')
-		answer := normalize(line)
-		if err != nil && answer == "" {
-			fmt.Println()
-			break
+		fmt.Printf("%d/%d [%d] - %s\n", i+1, len(order), idx+1, e.russian)
+		if showParts {
+			if k := len(shown(e)); k == 1 {
+				fmt.Println("Expected answer is in 1 part.")
+			} else {
+				fmt.Printf("Expected answer is in %d parts.\n", k)
+			}
 		}
-		if answer == "q" {
+		line, err := reader.ReadString('\n')
+		answer := strings.TrimSpace(line)
+		if err != nil && answer == "" || strings.EqualFold(answer, "q") {
 			break
 		}
 		asked++
-		switch {
-		case answer == "":
-			fmt.Println("Skipped.")
-		case correct(answer, e):
-			score++
-			fmt.Printf("Correct! Score: %d\n", score)
-		default:
-			fmt.Println("Wrong.")
-			for _, o := range lookalikes(answer, e) {
-				fmt.Printf("You might be thinking of %s [%s], which means %s.\n",
-					o.russian, o.pronunciation, meanings(o))
+		fmt.Printf(" - - - ANSWER [%d]: - - %s:  %s  [%s]\n", i+1, e.russian, meanings(e), e.pronunciation)
+
+		r, bad := grade(answer, e)
+		if r == partial && easyMatch {
+			fmt.Println("                 [ CORRECT +1 ] (Easy Match is ON)")
+			halves += 2
+		} else {
+			switch r {
+			case complete:
+				fmt.Println("                 [ CORRECT +1 ]")
+				halves += 2
+			case partial:
+				time.Sleep(time.Second)
+				fmt.Println("      [ PARTIALLY CORRECT +.5 ]")
+				halves++
+			case wrong:
+				time.Sleep(2 * time.Second)
+				fmt.Println("       [ *** WRONG -1.5 *** ]")
+				halves -= 3
+			case noAnswer:
+				time.Sleep(time.Second)
+				fmt.Println("            [ NOT ANSWERED -1 ]")
+				halves -= 2
 			}
 		}
-		fmt.Printf("Meaning: %s\n", meanings(e))
-		fmt.Printf("Pronunciation: %s  [%s]\n\n", e.russian, e.pronunciation)
+		if r == wrong {
+			for _, o := range lookalikes(bad, e) {
+				fmt.Println("Maybe you were thinking of - " + describe(o))
+			}
+		}
+		if r != complete {
+			missed = append(missed, miss{idx, answer})
+		}
+		fmt.Println()
 	}
-	finalScore(score, asked)
+
+	if len(missed) > 0 {
+		sort.SliceStable(missed, func(a, b int) bool { return missed[a].word < missed[b].word })
+		fmt.Println("Missed (or incomplete) ---------------------:")
+		for _, m := range missed {
+			fmt.Println()
+			fmt.Println(describe(m.word))
+			if m.answer == "" {
+				m.answer = "(none)"
+			}
+			fmt.Println("  Your Answer: " + m.answer)
+		}
+		fmt.Println()
+	}
+
+	if easyMatch {
+		fmt.Println("  (Easy Match Mode is ON)")
+	}
+	fmt.Printf("   Questions: %d\n", asked)
+	if asked == 0 {
+		fmt.Println("  No questions answered.")
+	} else {
+		fmt.Printf("       SCORE: %s\n\n", strconv.FormatFloat(float64(halves)/2, 'f', -1, 64))
+		pct := float64(halves) * 50 / float64(asked)
+		fmt.Printf("       GRADE: %.0f%%\n", pct)
+		if pct >= highScore {
+			fmt.Printf("\n  - %s -\n", randomPraise())
+		}
+	}
+	fmt.Println()
+	if easyMode {
+		fmt.Println("Using default (EASY) mode, try ' rquiz2 -h ' to see other options.")
+		fmt.Println()
+	}
 }
 
-// A final score of highScore percent or better gets one of these, picked
+// A final grade of highScore percent or better gets one of these, picked
 // at random.
 const highScore = 95
 
@@ -323,22 +532,6 @@ var praise = []string{
 	"Superb work!",
 }
 
-func finalScore(score, asked int) {
-	fmt.Println("=== Quiz over ===")
-	if asked > 0 {
-		pct := float64(score) / float64(asked) * 100
-		fmt.Printf("Final score: %d/%d (%.0f%%)\n", score, asked, pct)
-		if pct >= highScore {
-			fmt.Println(praise[rand.Intn(len(praise))])
-		}
-	} else {
-		fmt.Println("No questions answered.")
-	}
-	optionsBanner()
-}
-
-// optionsBanner ends each run with a reminder of where the options are.
-func optionsBanner() {
-	fmt.Println()
-	fmt.Println("For options: rquiz2 -h")
+func randomPraise() string {
+	return praise[rand.Intn(len(praise))]
 }
